@@ -1,0 +1,32 @@
+## IDF Component Manager manifest — Tab5-Launchpad (M5Stack Tab5 / ESP32-P4).
+##
+## Forked from Tab5-Orion's manifest. Dropped entirely: WiFi/BT co-processor
+## transport (esp_hosted/esp_wifi_remote), dynamic ELF apps (elf_loader),
+## and USB host mode (usb/usb_host_cdc_acm/*_vcp) -- this firmware has none
+## of those. The camera-stack pins are kept even though nothing calls into
+## the camera at runtime: SIC's Tab5 camera driver auto-registers whenever
+## SIC_TARGET_TAB5+SIC_BACKEND_ESPIDF are both defined (see
+## lib/SIC/src/core/autoreg.c), so esp_video and its dependencies must
+## resolve for the build to link at all. Versions are pinned for the same
+## reason Orion pinned them explicitly (API-compatibility, not just
+## "whatever esp_video's own `0.*` transitive pull resolves to today") --
+## see the per-pin comments below, carried over from Orion's manifest.
+##
+## The project is validated with ESP-IDF 5.5.4; `idf: >=5.3` is a
+## dependency-resolution floor, not a claim every 5.3/5.4 build is tested.
+dependencies:
+  idf: '>=5.3'
+  espressif/esp_video: '0.7.0'
+  espressif/esp_ipa: '0.1.0'
+  espressif/esp_cam_sensor: '0.7.1'
+  espressif/esp_sccb_intf: '0.0.4'
+
+  ## USB-MIDI device mode (main/usb_midi_device.c). Same component and
+  ## version floor as ESP-IDF 5.5.4's own official example,
+  ## examples/peripherals/usb/device/tusb_midi/main/idf_component.yml
+  ## (`^2.0.0`), which explicitly lists ESP32-P4 as a supported target --
+  ## that example's descriptor/install API shape is what
+  ## usb_midi_device.c is built against. Resolves to 2.4.0 + the
+  ## transitive espressif/tinyusb 0.21.0~2 core library (verified during
+  ## development: both fetch and build cleanly against this pin).
+  espressif/esp_tinyusb: '^2.0.0'

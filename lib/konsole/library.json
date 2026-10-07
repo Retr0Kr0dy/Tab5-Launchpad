@@ -1,0 +1,40 @@
+{
+  "name": "konsole",
+  "version": "1.0",
+  "description": "Portable, MCU-agnostic console with tiny IO shim.",
+  "keywords": [
+    "console",
+    "uart",
+    "cli",
+    "embedded"
+  ],
+  "authors": [
+    {
+      "name": "st4lk3r-unit"
+    }
+  ],
+  "frameworks": [
+    "arduino",
+    "espidf",
+    "stm32cube",
+    "mbed",
+    "zephyr"
+  ],
+  "platforms": [
+    "espressif32",
+    "ststm32",
+    "atmelsam",
+    "native"
+  ],
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "flags": [
+      "-DKONSOLE_ENABLE_ANSI=1"
+    ]
+  },
+  "examples": [
+    "examples/arduino_serial",
+    "examples/espidf_uart"
+  ]
+}

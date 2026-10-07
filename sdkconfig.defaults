@@ -1,0 +1,75 @@
+# sdkconfig defaults -- Tab5-Launchpad (M5Stack Tab5 / ESP32-P4).
+# Forked from Tab5-Orion's sdkconfig.defaults; WiFi/BT/dynamic-ELF-app/
+# video-player blocks dropped (this firmware has none of those). The
+# camera block is kept even though this firmware never uses the camera --
+# SIC's Tab5 camera driver auto-registers whenever SIC_TARGET_TAB5 +
+# SIC_BACKEND_ESPIDF are both defined (see lib/SIC/src/core/autoreg.c),
+# and esp_video_init() hard-fails at runtime if no sensor is configured,
+# so a sensor must be selected regardless of whether anything calls into
+# the camera at runtime.
+
+CONFIG_IDF_TARGET="esp32p4"
+
+# ---- ESP32-P4 silicon revision ------------------------------------------
+# Tab5 ships the ES (pre rev 3.00) P4 die.
+CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y
+CONFIG_ESP32P4_REV_MIN_1=y
+CONFIG_ESP32P4_REV_MIN_FULL=1
+CONFIG_ESP_REV_MIN_FULL=1
+
+# ---- Flash ---------------------------------------------------------------
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ---- PSRAM ---------------------------------------------------------------
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_HEX=y
+CONFIG_SPIRAM_SPEED_200M=y
+CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
+# 256KB L2, not 128KB: a 128KB L2 cache collapsed a plain internal-SRAM
+# sequential-read benchmark from ~210MB/s to ~3.5MB/s on this chip
+# (instruction-fetch stalls from an L2 too small to hold the firmware's
+# code footprint) -- carried over from Tab5-Orion's own measured finding.
+CONFIG_CACHE_L2_CACHE_256KB=y
+CONFIG_CACHE_L2_CACHE_LINE_128B=y
+CONFIG_IDF_EXPERIMENTAL_FEATURES=y
+
+# ---- Console -------------------------------------------------------------
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# ---- FreeRTOS ------------------------------------------------------------
+CONFIG_FREERTOS_HZ=1000
+
+# ---- Main task stack -------------------------------------------------------
+# Modest headroom above the IDF default for SGFX/UI draw call chains.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# ---- Camera (esp_video) -- kept only because SIC's autoreg couples it to
+# SIC_TARGET_TAB5+SIC_BACKEND_ESPIDF; not used by this firmware's features.
+CONFIG_CAMERA_SC202CS=y
+CONFIG_CAMERA_SC202CS_AUTO_DETECT=y
+CONFIG_CAMERA_SC202CS_AUTO_DETECT_MIPI_INTERFACE_SENSOR=y
+CONFIG_CAMERA_SC202CS_MIPI_RAW8_1280x720_30FPS=y
+CONFIG_ESP_VIDEO_ENABLE_MIPI_CSI_VIDEO_DEVICE=y
+CONFIG_ESP_VIDEO_ENABLE_ISP=y
+CONFIG_ESP_VIDEO_ENABLE_ISP_VIDEO_DEVICE=y
+CONFIG_ESP_VIDEO_ENABLE_ISP_PIPELINE_CONTROLLER=y
+
+# ---- Misc ----------------------------------------------------------------
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+CONFIG_FATFS_VFS_FSTAT_BLKSIZE=8192
+CONFIG_FATFS_LFN_HEAP=y
+# CONFIG_FATFS_LFN_NONE is not set
+CONFIG_FATFS_ALLOC_PREFER_EXTRAM=y
+
+# ---- USB-MIDI device mode (espressif/esp_tinyusb) -------------------------
+# This firmware has no USB host mode at all -- the single USB-A port is
+# permanently a class-compliant USB-MIDI device from boot. Only the MIDI
+# class is enabled; no CDC/MSC/HID device classes are wanted here.
+CONFIG_TINYUSB_MIDI_COUNT=1

@@ -1,0 +1,149 @@
+dependencies:
+  espressif/cmake_utilities:
+    component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.1'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 0.5.3
+  espressif/esp_cam_sensor:
+    component_hash: c023850f1201025b8cc2c0ae5f3d0d64f250b4022c4c045b76ce7988b85bc306
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    - name: espressif/esp_sccb_intf
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=0.0.2'
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32p4
+    version: 0.7.1
+  espressif/esp_h264:
+    component_hash: 3d60078419ceac61cd87579664ae6a5a9b9a42d6f2edf4e23d753af8d2a67da9
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    targets:
+    - esp32s3
+    - esp32s31
+    - esp32p4
+    version: 1.4.1
+  espressif/esp_ipa:
+    component_hash: 7497e9ef8122df2105984c49bd5265549af77361b370b36b049423c9f89ec056
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3'
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32p4
+    version: 0.1.0
+  espressif/esp_sccb_intf:
+    component_hash: 19fd07c1296aaf03f61d0f5959c4b6d7d53380f499d28d5c197be0a8c6e04d74
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 0.0.4
+  espressif/esp_tinyusb:
+    component_hash: cfb066b239957ebfba5f7a7764e534b3000d3b400fd42d11bedb6ee5e6eaf3c9
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    - name: espressif/tinyusb
+      registry_url: https://components.espressif.com
+      require: public
+      version: '>=0.17.0~2'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    - esp32h4
+    - esp32s31
+    version: 2.4.0
+  espressif/esp_video:
+    component_hash: c1617c7c15643cb905c130b90239f0351896977da1ddf119f083a7e0664dfac4
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3'
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    - name: espressif/esp_cam_sensor
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    - name: espressif/esp_h264
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=1.0.3'
+    - name: espressif/esp_ipa
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32p4
+    version: 0.7.0
+  espressif/tinyusb:
+    component_hash: 16c8d774dab1f484d3e0c0f61105624d2424bbae864efd19818baf7b451b41e7
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    - esp32h4
+    - esp32s31
+    version: 0.21.0~2
+  idf:
+    source:
+      type: idf
+    version: 5.5.4
+direct_dependencies:
+- espressif/esp_cam_sensor
+- espressif/esp_ipa
+- espressif/esp_sccb_intf
+- espressif/esp_tinyusb
+- espressif/esp_video
+- idf
+manifest_hash: dfd14ea484c8b2c8f39d17fd7ea35320de3f510f5d863607136323e3412b65df
+target: esp32p4
+version: 2.0.0

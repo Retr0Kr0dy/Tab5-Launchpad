@@ -1,0 +1,28 @@
+{
+  "name": "SIC",
+  "version": "0.3.0-rc3",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "st4lk3r-unit"
+    }
+  ],
+  "frameworks": [
+    "arduino",
+    "espidf"
+  ],
+  "platforms": [
+    "espressif32"
+  ],
+  "headers": [
+    "sic/sic.h"
+  ],
+  "build": {
+    "srcDir": "src",
+    "includeDir": "include",
+    "flags": []
+  },
+  "examples": [
+    "examples/*/*"
+  ]
+}
