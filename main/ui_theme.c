@@ -481,7 +481,10 @@ int orion_ui_theme_load_file(const char* path)
             continue;
         }
         if (strcmp(key, "name") == 0) {
-            snprintf(candidate.name, sizeof candidate.name, "%s", val);
+            /* Explicit precision: `val` is parsed from a theme file on SD,
+             * unbounded from the compiler's view -- see ymodem.c's own
+             * comment on the same -Wformat-truncation pattern. */
+            snprintf(candidate.name, sizeof candidate.name, "%.31s", val);
             continue;
         }
 

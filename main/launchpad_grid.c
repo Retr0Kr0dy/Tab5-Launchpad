@@ -98,7 +98,7 @@ static void pads(sgfx_device_t*d,lp_rect_t a,const lp_grid_model_t*m) {
             r.x+1,r.y+1,r.w-2,3
         },accent);
         char text[40];
-        if(m->mode==LP_MODE_DRUM)snprintf(text,sizeof text,"%s",drum_name(i));
+        if(m->mode==LP_MODE_DRUM)snprintf(text,sizeof text,"%.39s",drum_name(i)); /* explicit precision so -Wformat-truncation can prove this is safe; see ymodem.c's own comment on the same pattern */
         else snprintf(text,sizeof text,"%s%d",notes[note%12],note/12-1);
         su_fit(d,(su_rect) {
             r.x+16,r.y+14,r.w-32,40
@@ -306,7 +306,7 @@ static void looper(sgfx_device_t*d,lp_rect_t a,const lp_grid_model_t*m) {
 
     int y=rec.y+rec.h+28;
     char line[64];
-    snprintf(line,sizeof line,"Track %d: %s",sel+1,loop_state_name(state));
+    snprintf(line,sizeof line,"Track %d: %.44s",sel+1,loop_state_name(state)); /* explicit precision so -Wformat-truncation can prove this is safe; see ymodem.c's own comment on the same pattern */
     su_text(d,a.x,y,line,32,SU_TEXT,SU_BG);
     y+=48;
     if(m->loop_count[sel]>0) {

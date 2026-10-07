@@ -119,7 +119,12 @@ orion_xfer_result_t orion_ymodem_send(const orion_xfer_io_t* io, const char* fil
     /* Block 0 (header): "name\0size\0", zero-padded to 128 bytes. */
     uint8_t hdr[128];
     memset(hdr, 0, sizeof hdr);
-    size_t hlen = (size_t)snprintf((char*)hdr, sizeof hdr, "%s", base) + 1;
+    /* Explicit precision: `base` is derived from the caller's `filepath`
+     * parameter, unbounded from the compiler's view -- same
+     * -Wformat-truncation pattern as `filename`/`dest_dir` elsewhere in
+     * this file. 127 preserves the exact same truncation behavior as the
+     * bare "%s" this replaces (full buffer available). */
+    size_t hlen = (size_t)snprintf((char*)hdr, sizeof hdr, "%.127s", base) + 1;
     if (hlen < sizeof hdr) snprintf((char*)hdr + hlen, sizeof(hdr) - hlen, "%ld", fsize);
     if (!send_block(io, 0, hdr, sizeof hdr, prog)) { fclose(fp); return ORION_XFER_ERR_PROTOCOL; }
 
@@ -217,7 +222,16 @@ orion_xfer_result_t orion_ymodem_receive(const orion_xfer_io_t* io, const char* 
     }
 
     char filename[96];
-    snprintf(filename, sizeof filename, "%s", (const char*)data);
+    /* Explicit precision (95 = sizeof(filename)-1), not a bare "%s": `data`
+     * is a 1024-byte protocol buffer with no compiler-provable guarantee of
+     * a null terminator within the first 96 bytes (it's YMODEM header data
+     * from whatever's on the other end of the serial line), so GCC's
+     * -Wformat-truncation can't prove this won't truncate and -Werror turns
+     * that into a hard build failure. Runtime behavior is identical to the
+     * bare "%s" this replaces -- snprintf already capped output at
+     * sizeof(filename)-1 either way; this only makes that bound visible to
+     * the compiler's own static analysis too. */
+    snprintf(filename, sizeof filename, "%.95s", (const char*)data);
     if (filename[0] == '\0') {
         /* Empty header = sender ending an already-finished batch cleanly. */
         uint8_t ack = ACK;
@@ -243,7 +257,11 @@ orion_xfer_result_t orion_ymodem_receive(const orion_xfer_io_t* io, const char* 
     (void)mkdir(dest_dir, 0777);
 
     char fullpath[256];
-    snprintf(fullpath, sizeof fullpath, "%s/%s", dest_dir, filename);
+    /* Explicit precision: `dest_dir` is a caller-supplied parameter
+     * (ultimately a console command argument), unbounded from the
+     * compiler's view -- same -Wformat-truncation pattern as `filename`
+     * above in this file. */
+    snprintf(fullpath, sizeof fullpath, "%.159s/%.95s", dest_dir, filename);
     FILE* fp = fopen(fullpath, "wb");
     if (!fp) return ORION_XFER_ERR_IO;
 

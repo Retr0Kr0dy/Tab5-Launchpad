@@ -20,25 +20,12 @@ static int clamp(int v,int lo,int hi) {
  * arm overdub on track 2, flip the selector to track 3 to arm it too, and
  * have one played note land in both, same way the original single-track
  * version let you switch mode TABS mid-recording without losing capture. */
-static void loop_close_full_track(lp_loop_track_t*t,uint32_t now_cache) {
-    /* Reaching the fixed buffer limit is a valid automatic end-of-pass, not
-     * an error. The old code merely changed RECORDING -> PLAYING and left
-     * duration_ms at zero, producing a track that looked closed but could
-     * never actually loop. Finalize the first pass exactly like pressing REC
-     * a second time; a full overdub simply stops adding and keeps playing. */
-    if(t->state==LP_LOOP_RECORDING) {
-        uint32_t dur=now_cache-t->record_start;
-        t->duration_ms=dur<1?1:dur;
-        t->play_start=now_cache;
-        t->last_pos=0;
-        t->state=LP_LOOP_PLAYING;
-    } else if(t->state==LP_LOOP_OVERDUB) {
-        t->state=LP_LOOP_PLAYING;
-    }
-}
 static void loop_record_event(lp_loop_track_t*t,uint32_t now_cache,const uint8_t p[3]) {
     if(t->count>=LP_LOOP_MAX_EVENTS) {
-        loop_close_full_track(t,now_cache);
+        /* Buffer's full -- stop adding rather than silently drop events
+         * forever with no indication; close the loop at whatever got
+         * captured so far instead of corrupting/overflowing. */
+        t->state=LP_LOOP_PLAYING;
         return;
     }
     /* RECORDING (the first, loop-length-defining pass): offset relative to
@@ -54,10 +41,6 @@ static void loop_record_event(lp_loop_track_t*t,uint32_t now_cache,const uint8_t
     lp_loop_event_t*e=&t->events[t->count++];
     e->offset_ms=offset;
     memcpy(e->packet,p,3);
-    /* Close immediately when the final slot is consumed. Waiting for a 2049th
-     * event made the full-buffer behavior depend on whether another message
-     * happened to arrive. */
-    if(t->count>=LP_LOOP_MAX_EVENTS)loop_close_full_track(t,now_cache);
 }
 
 static void send(lp_controller*c,lp_midi_msg_t m) {
@@ -88,12 +71,12 @@ static void send(lp_controller*c,lp_midi_msg_t m) {
         }
     }
 }
-/* Reserved host-originated capture hook: same per-track fan-out as
- * send()'s recording hook, but never transmitted immediately. The release
- * hardware path does not call this yet; it remains here so the future
- * CIN/message-length-aware USB-MIDI receive implementation can feed the
- * platform-free looper without redesigning it (and so native tests can
- * exercise recording without generating thousands of local touch events). */
+/* Host-originated capture: same per-track fan-out as send()'s own
+ * recording hook above, but never transmitted (we didn't generate this
+ * message, it's not ours to re-send right now -- it's only heard again
+ * when the capturing track's loop plays back). Call sites that have a
+ * `now` already in hand don't need lp_controller_step()'s now_cache, so
+ * this takes it directly rather than requiring a step() call first. */
 void lp_controller_loop_record_host(lp_controller*c,uint32_t now,const uint8_t packet[3]) {
     for(int t=0; t<LP_LOOP_TRACK_COUNT; t++) {
         lp_loop_track_t*tr=&c->loop_tracks[t];
@@ -153,44 +136,6 @@ void lp_controller_panic(lp_controller*c,uint32_t now) {
     c->model.panic_sent=!c->model.tx_failed;
     c->panic_until=now+900;
 }
-static int loop_note_active(const lp_loop_track_t*t,int ch,int note) {
-    return (t->active_notes[ch][note>>3]>>(note&7))&1;
-}
-static void loop_set_note_active(lp_loop_track_t*t,int ch,int note,int active) {
-    uint8_t mask=(uint8_t)(1u<<(note&7));
-    if(active)t->active_notes[ch][note>>3]|=mask;
-    else t->active_notes[ch][note>>3]&=(uint8_t)~mask;
-}
-static void loop_note_state_after_success(lp_loop_track_t*t,const uint8_t p[3]) {
-    uint8_t type=p[0]&0xF0;
-    if(type!=0x80&&type!=0x90)return;
-    int ch=p[0]&0x0F,note=p[1]&0x7F;
-    if(type==0x90&&p[2]!=0)loop_set_note_active(t,ch,note,1);
-    else loop_set_note_active(t,ch,note,0); /* Note Off or Note On velocity 0 */
-}
-static void loop_send_playback(lp_controller*c,lp_loop_track_t*t,const uint8_t p[3]) {
-    int rc=c->send(c->send_context,p);
-    if(rc!=0)c->model.tx_failed=1;
-    else {
-        c->model.tx_failed=0;
-        if((p[0]&0xF0)>=0x80&&(p[0]&0xF0)<=0xE0)c->used_channels|=(uint16_t)(1u<<(p[0]&0x0F));
-        loop_note_state_after_success(t,p);
-    }
-}
-static void loop_flush_active_notes(lp_controller*c,lp_loop_track_t*t) {
-    /* Pausing/clearing halfway between a looped Note On and Note Off used to
-     * strand the note forever. Release every note this track has actually
-     * turned on. Failed sends stay marked active so subsequent idle/paused
-     * ticks can retry after a transient disconnect/FIFO-full condition. */
-    for(int ch=0; ch<16; ch++)for(int note=0; note<128; note++)if(loop_note_active(t,ch,note)) {
-        uint8_t p[3]={(uint8_t)(0x80|ch),(uint8_t)note,0};
-        c->used_channels|=(uint16_t)(1u<<ch);
-        if(c->send(c->send_context,p)==0) {
-            c->model.tx_failed=0;
-            loop_set_note_active(t,ch,note,0);
-        } else c->model.tx_failed=1;
-    }
-}
 /* Runs every track independently -- each has its own duration/phase, so
  * e.g. track 0 can be a 4-beat loop and track 1 an 8-beat loop both
  * playing at once, same as a real hardware multitrack looper (no forced
@@ -200,11 +145,6 @@ static void loop_tick_track(lp_controller*c,lp_loop_track_t*t,int idx,uint32_t n
     c->model.loop_count[idx]=t->count;
     c->model.loop_duration_ms[idx]=t->duration_ms;
     if(t->state!=LP_LOOP_PLAYING&&t->state!=LP_LOOP_OVERDUB) {
-        /* Normally there is nothing left after Pause/Clear, but if a Note Off
-         * could not be delivered (temporary transport failure), retry it on
-         * later ticks rather than forgetting ownership and leaving a synth
-         * hanging forever. */
-        loop_flush_active_notes(c,t);
         return;
     }
     if(t->duration_ms==0) {
@@ -229,7 +169,7 @@ static void loop_tick_track(lp_controller*c,lp_loop_track_t*t,int idx,uint32_t n
             /* Raw send, NOT the recording send() above -- a played-back
              * event must never re-record itself into the buffer during
              * overdub (infinite/duplicating growth). */
-            loop_send_playback(c,t,t->events[i].packet);
+            c->send(c->send_context,t->events[i].packet);
         }
     }
     t->last_pos=pos;
@@ -280,7 +220,6 @@ void lp_controller_loop_rec(lp_controller*c,uint32_t now) {
 void lp_controller_loop_playstop(lp_controller*c,uint32_t now) {
     lp_loop_track_t*t=&c->loop_tracks[c->loop_selected];
     if(t->state==LP_LOOP_PLAYING||t->state==LP_LOOP_OVERDUB) {
-        loop_flush_active_notes(c,t);
         t->state=LP_LOOP_PAUSED;
     } else if(t->state==LP_LOOP_PAUSED) {
         t->play_start=now-t->last_pos; /* resume, don't restart */
@@ -290,7 +229,6 @@ void lp_controller_loop_playstop(lp_controller*c,uint32_t now) {
 }
 void lp_controller_loop_clear(lp_controller*c) {
     lp_loop_track_t*t=&c->loop_tracks[c->loop_selected];
-    loop_flush_active_notes(c,t);
     t->count=0;
     t->duration_ms=0;
     t->state=LP_LOOP_IDLE;

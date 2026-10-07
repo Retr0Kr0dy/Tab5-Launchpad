@@ -49,13 +49,17 @@ int run_launchpad_app(sgfx_device_t*d,const touch_t*t,struct konsole*ks) {
             lp_controller_release(&c);
             last_good=now;
         }
-        /* Host -> device MIDI capture is intentionally disabled for this
-         * release. The USB-MIDI receive primitive currently exposes only a
-         * fixed three-byte payload and does not yet preserve/interpret the
-         * USB-MIDI CIN/message length needed for all MIDI message classes.
-         * Keep the portable looper hook for the future implementation, but
-         * do not advertise or feed it from the hardware path until parsing
-         * is complete. See README.md -> Planned post-release features. */
+        /* Drain whatever the host sent us this tick into any
+         * RECORDING/OVERDUB track -- a no-op (and harmless to call) when
+         * nothing is armed. Capture only: never echoed back out here,
+         * see lp_controller_loop_record_host()'s own comment. Drained in
+         * a loop, not just once, so a burst of incoming events (e.g. a
+         * DAW dumping a chord) doesn't queue up and leak into next tick's
+         * timestamp. */
+        uint8_t in_packet[3];
+        while(orion_usb_midi_recv(in_packet)==0) {
+            lp_controller_loop_record_host(&c,now,in_packet);
+        }
         c.model.midi_active=orion_usb_midi_ready();
         c.model.host_connected=host;
         int changed=!have_previous||memcmp(&previous,&c.model,sizeof previous)!=0;

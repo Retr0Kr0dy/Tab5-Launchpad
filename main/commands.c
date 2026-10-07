@@ -442,8 +442,11 @@ static int cmd_screenshot(struct konsole* ks, int argc, char** argv)
     if (!fb || w <= 0 || h <= 0) { kon_printf(ks, "screenshot: no framebuffer\r\n"); return -1; }
 
     char ppm_path[80], txt_path[80];
-    snprintf(ppm_path, sizeof ppm_path, "/sdcard/orion/%s.ppm", name);
-    snprintf(txt_path, sizeof txt_path, "/sdcard/orion/%s.txt", name);
+    /* Explicit precision: `name` is a console command argument, unbounded
+     * from the compiler's view, so -Wformat-truncation can't prove this
+     * fits -- see ymodem.c's own comment on the same pattern. */
+    snprintf(ppm_path, sizeof ppm_path, "/sdcard/orion/%.61s.ppm", name);
+    snprintf(txt_path, sizeof txt_path, "/sdcard/orion/%.61s.txt", name);
 
     /* A filename with a partial/interrupted write from an earlier attempt
      * can leave FATFS with a directory entry fopen(..., "wb") refuses to
@@ -555,7 +558,10 @@ static int cmd_ls(struct konsole* ks, int argc, char** argv)
     struct dirent* e;
     while ((e = readdir(dp)) != NULL) {
         char full[512];
-        snprintf(full, sizeof full, "%s/%s", dir, e->d_name);
+        /* Explicit precision: `dir` is a console command argument,
+         * unbounded from the compiler's view -- see ymodem.c's own comment
+         * on the same pattern. */
+        snprintf(full, sizeof full, "%.250s/%.250s", dir, e->d_name);
         struct stat st;
         if (stat(full, &st) == 0 && S_ISDIR(st.st_mode)) {
             kon_printf(ks, "  <dir>  %s\r\n", e->d_name);

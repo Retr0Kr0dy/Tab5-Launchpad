@@ -289,7 +289,7 @@ void orion_ui_text_marquee(sgfx_device_t* d, orion_ui_rect_t r, const char* s,
         if (s_marquee[i].r.x == r.x && s_marquee[i].r.y == r.y) {
             s_marquee[i].r = r; s_marquee[i].fg = fg; s_marquee[i].bg = bg; s_marquee[i].scale = scale;
             s_marquee[i].clip = d->clip;
-            snprintf(s_marquee[i].text, sizeof s_marquee[i].text, "%s", s);
+            snprintf(s_marquee[i].text, sizeof s_marquee[i].text, "%.79s", s); /* explicit precision so -Wformat-truncation can prove this is safe; see ymodem.c's own comment on the same pattern */
             return;
         }
     }
@@ -297,7 +297,7 @@ void orion_ui_text_marquee(sgfx_device_t* d, orion_ui_rect_t r, const char* s,
         orion_ui_marquee_slot_t* m = &s_marquee[s_marquee_count++];
         m->r = r; m->fg = fg; m->bg = bg; m->scale = scale;
         m->clip = d->clip;
-        snprintf(m->text, sizeof m->text, "%s", s);
+        snprintf(m->text, sizeof m->text, "%.79s", s); /* explicit precision so -Wformat-truncation can prove this is safe; see ymodem.c's own comment on the same pattern */
     }
 }
 
@@ -1312,7 +1312,7 @@ void orion_ui_missing_asset(sgfx_device_t* d, orion_ui_rect_t r, const char* nam
         fill(d, r.x + r.w - 4 - i, r.y + i, 3, 3, t->placeholder);
     }
     char buf[56];
-    snprintf(buf, sizeof buf, "MISSING:%s", name ? name : "ASSET");
+    snprintf(buf, sizeof buf, "MISSING:%.47s", name ? name : "ASSET"); /* explicit precision so -Wformat-truncation can prove this is safe; see ymodem.c's own comment on the same pattern */
     orion_ui_text_marquee(d, (orion_ui_rect_t){r.x + 6, r.y + r.h/2 - 3, r.w - 12, 0}, buf, t->placeholder, t->panel, t->metrics.small_scale, s_now_ms);
 }
 

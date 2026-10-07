@@ -115,7 +115,7 @@ int sgfx_hal_dsi_flip_to_front(sgfx_bus_t* bus, uint32_t timeout_ms);
  * DSI command channel is genuinely being understood by the panel (this bus
  * has no general-purpose read_data path -- see espidf_dsi.c's header).
  * Returns SGFX_OK if all three reads succeeded; *id1, *id2, *id3 are set
- * 0xEE if a read failed, so a partial failure is visible even on error. */
+ * to 0xEE if a read failed, so a partial failure is visible even on error. */
 int sgfx_hal_dsi_debug_read_ili9881c_id(sgfx_bus_t* bus, uint8_t* id1, uint8_t* id2, uint8_t* id3);
 
 #ifdef __cplusplus

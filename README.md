@@ -21,7 +21,8 @@ these aren't mockups.
   relative touch drag, live value readout), **XY** (CC1 + CC74, a soft
   glowing touch point, absolute position), **Macros** (CC102-117, 16 relative
   rotary knobs), **Looper** (4-track, records/replays whatever you play in
-  any mode, per-track overdub, visual BPM metronome).
+  any mode, per-track overdub, visual BPM metronome, can also capture MIDI
+  from a connected host — see below).
 - **Every control shows its real value and CC/note assignment on screen** —
   no memorizing a mapping, no guessing what a fader is currently at.
 - **Large, dedicated channel picker** (not a cramped always-on strip) — 16
@@ -102,11 +103,10 @@ going underneath. Tap Record again while it's playing to **overdub**
 stop adding. **Play/Stop** pauses and resumes from exactly where it left
 off, not from the start. **Clear** wipes the selected track only.
 
-Each track records whatever you play locally in *any* mode. Host → device
-MIDI capture is deliberately **not enabled in this release**; robust
-USB-MIDI CIN/message-length parsing is listed below as a post-release
-feature rather than pretending fixed 3-byte receive packets cover every
-MIDI message type safely.
+Each track records whatever you play locally in *any* mode, **and** MIDI
+received from a connected host/DAW while that track is armed — so you can
+loop something your DAW sends back to the device, not just what you play
+on the pads.
 
 A BPM readout with +/- buttons and a pulsing beat indicator give a visual
 tempo reference — purely a feel aid, it does not quantize or snap
@@ -144,26 +144,12 @@ Exact note/CC numbers, value formulas, and per-mode variant tables:
 | Faders | CC 20-27 | Continuous, relative drag |
 | XY | CC 1 + CC 74 | Absolute touch position, holds last value on release |
 | Macros | CC 102-117 | Relative vertical drag |
-| Looper | (replays recorded messages) | Not its own message type — re-sends the locally generated MIDI captured into each track |
+| Looper | (replays recorded messages) | Not its own message type — re-sends whatever was captured, locally or from the host, into the selected track |
 
 MIDI channel is set entirely by the device (via the channel picker) — the
 host never negotiates or assigns it; it just listens on whichever channel
 its MIDI input is pointed at. 16 channels is a hard MIDI 1.0 protocol
 limit, not a firmware restriction.
-
-
-## Planned post-release features
-
-These are intentionally deferred rather than presented as release-ready behavior:
-
-- **Editable MIDI mappings and named presets** — remap notes/CCs and controller
-  assignments from the device instead of relying only on the current fixed defaults.
-- **Persistent SD-card presets** — save those mappings/presets to the Tab5 SD card
-  and automatically restore the last active setup at boot.
-- **Host → device MIDI capture for the Looper** — finish CIN/message-length-aware
-  USB-MIDI receive parsing first, then allow tracks to safely capture MIDI sent back
-  by a DAW/host. The low-level receive/looper hook exists, but it is intentionally
-  disabled in the release firmware until this parser is complete.
 
 ## Building
 
@@ -174,12 +160,12 @@ idf.py build
 idf.py -p /dev/ttyACM0 flash monitor
 ```
 
-No ESP-IDF install handy? `tools/idf-env.sh` sets one up from a PlatformIO
-installation's bundled toolchain — see that file's own header comment.
-Known gap worth knowing about: some sandboxed/offline setups fetch an
-`esptool` that predates ESP32-P4 support; if `elf2image`/flashing fails
-with `invalid choice: 'esp32p4'`, you need an esptool ≥ 5.x ahead of it on
-`PATH`.
+Requires a real ESP-IDF 5.5.4 install (`. $IDF_PATH/export.sh` before the
+commands above) — this is a stock IDF project, nothing project-specific
+needed beyond that. Known gap worth knowing about: some sandboxed/offline
+setups fetch an `esptool` that predates ESP32-P4 support; if
+`elf2image`/flashing fails with `invalid choice: 'esp32p4'`, you need an
+esptool ≥ 5.x ahead of it on `PATH`.
 
 Iterate on the screen's visuals without hardware at all:
 
@@ -209,7 +195,8 @@ question on your own hardware.
   `sgfx_blit()` → `display.c`'s `set_window`/`write_pixels`), not one fill
   call per antialiasing run.
 - `main/launchpad_app.c` — the one ESP-IDF-specific file: touch polling,
-  frame pacing, and wiring the portable controller to real hardware.
+  frame pacing, host MIDI receive polling (feeds the Looper's host-capture
+  path), wiring the portable controller to real hardware.
 - `main/usb_midi_device.c/.h` — always-on class-compliant USB-MIDI device
   (TinyUSB), no host mode of any kind.
 - `lib/SIC`, `lib/SGFX`, `lib/konsole` — vendored hardware-abstraction,

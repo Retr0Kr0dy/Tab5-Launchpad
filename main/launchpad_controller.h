@@ -14,10 +14,10 @@ lp_owner;
 /* Looper: records whatever send() actually transmits (any mode, not just
  * LP_MODE_LOOPER's own screen -- recording/playback state is global
  * controller state, independent of which tab is currently showing, same
- * as channels[]/variants[] above). A raw host-capture hook also exists for
- * the planned post-release receive/parser work, but the release firmware
- * intentionally does not feed it from USB until variable-length/CIN-aware
- * MIDI parsing is implemented. This header stays platform-free.
+ * as channels[]/variants[] above), PLUS whatever arrives from the host
+ * (see lp_controller_loop_record_host() -- a separate entry point,
+ * platform-specific code polls orion_usb_midi_recv() and feeds it in;
+ * this header stays platform-free, it doesn't call the transport itself).
  * LP_LOOP_TRACK_COUNT independent tracks, each with its own buffer/state/
  * length -- NOT forced to share a duration (no beat-quantization in this
  * version; the BPM below is a visual metronome aid only, it does not snap
@@ -47,12 +47,6 @@ typedef struct {
     uint32_t duration_ms;   /* set when this track's first RECORDING pass ends; fixed after that */
     uint32_t play_start;    /* ms timestamp this track's current playback pass 0-offset began */
     uint32_t last_pos;      /* this track's loop-relative ms position as of the previous tick */
-    /* Notes that THIS track has successfully replayed as Note On and has not
-     * yet replayed a matching Note Off. 128 notes = 16-byte bitmap per MIDI
-     * channel. Pause/Clear use this to immediately release only notes owned by
-     * the stopped track instead of waiting for a future event that will never
-     * arrive while playback is stopped. */
-    uint8_t active_notes[16][16];
 } lp_loop_track_t;
 
 typedef struct  {
@@ -97,8 +91,13 @@ void lp_controller_loop_select(lp_controller*,int track);
 /* +1/-1 BPM, clamped to a sane range (visual pulse only, see loop_bpm's
  * own comment -- never affects recording/playback). */
 void lp_controller_loop_bpm_adjust(lp_controller*,int delta);
-/* Reserved raw host-capture hook for the planned CIN/message-length-aware
- * USB-MIDI receive implementation. It is useful to keep the portable looper
- * path testable, but release hardware code intentionally does not call it
- * yet. Captured host messages are record-only, never immediate echo. */
+/* Feeds one incoming (host-originated) raw 3-byte MIDI packet into
+ * whichever track is currently RECORDING/OVERDUB, if any -- a no-op
+ * otherwise. Platform-specific code (launchpad_app.c) is what actually
+ * polls orion_usb_midi_recv() and calls this; this header/implementation
+ * stays platform-free like the rest of launchpad_controller.c. Captured
+ * host messages are recorded only -- never echoed back to the host
+ * immediately (that would just be a pointless echo); they're heard again
+ * only when this track's loop plays back, same as locally-generated
+ * events. */
 void lp_controller_loop_record_host(lp_controller*,uint32_t now,const uint8_t packet[3]);

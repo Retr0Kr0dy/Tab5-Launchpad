@@ -95,7 +95,7 @@ void su_text(sgfx_device_t*d,int x,int y,const char*s,int size,sgfx_rgba8_t fg,s
 }
 void su_fit(sgfx_device_t*d,su_rect r,const char*s,int size,sgfx_rgba8_t fg,sgfx_rgba8_t bg) {
     char b[160];
-    snprintf(b,sizeof b,"%s",s);
+    snprintf(b,sizeof b,"%.159s",s); /* explicit precision so -Wformat-truncation can prove this is safe; see ymodem.c's own comment on the same pattern -- `s` is caller-supplied, unbounded from the compiler's view */
     int n=(int)strlen(b);
     int clipped=0;
     while(n>0&&su_text_width(b,size)>r.w) {
