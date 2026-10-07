@@ -154,7 +154,10 @@ static glyph_entry_t* cache_find(uint32_t cp, int px){
 static inline uint8_t clamp_u8(int v){ if(v<0) return 0; if(v>255) return 255; return (uint8_t)v; }
 /* SDF is stored with 0..255 where 128 ≈ distance 0; scale factor chosen during bake */
 static uint8_t sdf_sample(const uint8_t* img,int iw,int ih,int ix,int iy){
-  if(ix<0) ix=0; if(iy<0) iy=0; if(ix>=iw) ix=iw-1; if(iy>=ih) iy=ih-1;
+  if (ix < 0) ix = 0;
+  if (iy < 0) iy = 0;
+  if (ix >= iw) ix = iw - 1;
+  if (iy >= ih) iy = ih - 1;
   return img[iy*iw+ix];
 }
 
