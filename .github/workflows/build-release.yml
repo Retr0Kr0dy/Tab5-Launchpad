@@ -1,0 +1,87 @@
+name: Build and release firmware
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write 
+
+jobs:
+  native-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Controller and touch regression tests
+        run: ./tools/test-controller.sh
+
+  build:
+    needs: native-tests
+    runs-on: ubuntu-latest
+    # Pinned to the exact IDF version this firmware is tested against (see
+    # README.md's Building section) -- bump both places together.
+    container:
+      image: espressif/idf:v5.5.4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py build
+
+      - name: Collect flashable artifacts
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp build/tab5-launchpad.bin dist/
+          cp build/bootloader/bootloader.bin dist/
+          cp build/partition_table/partition-table.bin dist/
+          cp build/flasher_args.json dist/
+          cp partitions.csv dist/
+          ( cd dist && sha256sum ./*.bin > SHA256SUMS.txt )
+          cat > dist/FLASH.md <<'EOF'
+          # Flashing Tab5-Launchpad
+
+          With `esptool` >= 5.x (ESP32-P4 support -- older esptool builds
+          reject `--chip esp32p4`, see this project's own README) on PATH:
+
+          ```sh
+          esptool --chip esp32p4 -p /dev/ttyACM0 -b 460800 write_flash \
+            0x2000  bootloader.bin \
+            0x8000  partition-table.bin \
+            0x10000 tab5-launchpad.bin
+          ```
+
+          Those three offsets are this project's actual, current layout
+          (0x2000 bootloader / 0x8000 partition table / 0x10000 app,
+          standard for ESP32-P4) -- `flasher_args.json` in this same
+          archive is the generated-at-build-time ground truth if they
+          ever drift. Or use the full ESP-IDF toolchain instead:
+
+          ```sh
+          idf.py -p /dev/ttyACM0 flash monitor
+          ```
+          EOF
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tab5-launchpad-firmware-${{ github.sha }}
+          path: dist/
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
