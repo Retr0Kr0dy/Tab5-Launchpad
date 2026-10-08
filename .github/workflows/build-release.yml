@@ -14,6 +14,7 @@ permissions:
 jobs:
   native-tests:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,10 +54,9 @@ jobs:
           cp build/bootloader/bootloader.bin dist/
           cp build/partition_table/partition-table.bin dist/
 
-          # Produce a complete flash image using ESP-IDF's
-          # generated addresses and flash configuration.
-          #
-          # flasher_args.json is used internally only.
+          # Generate full flash image using ESP-IDF's
+          # actual flash layout and flash configuration.
+          # flasher_args.json is internal only.
           python - <<'PY'
           import json
           import subprocess
@@ -64,22 +64,15 @@ jobs:
           from pathlib import Path
 
           build = Path("build")
+          dist = Path("dist")
+          output = dist / "Tab5-Launchpad-full.bin"
+
           args = json.loads(
               (build / "flasher_args.json").read_text()
           )
 
           settings = args["flash_settings"]
           flash_files = args["flash_files"]
-
-          command = [
-              sys.executable, "-m", "esptool",
-              "--chip", "esp32p4",
-              "merge_bin",
-              "-o", "../dist/Tab5-Launchpad-full.bin",
-              "--flash-mode", settings["flash_mode"],
-              "--flash-freq", settings["flash_freq"],
-              "--flash-size", settings["flash_size"],
-          ]
 
           entries = sorted(
               (
@@ -89,44 +82,67 @@ jobs:
               key=lambda entry: entry[0],
           )
 
+          # esptool v4.12 syntax:
+          # merge_bin, --output, --flash_mode,
+          # --flash_freq, --flash_size.
+          command = [
+              sys.executable,
+              "-m", "esptool",
+              "--chip", "esp32p4",
+              "merge_bin",
+              "--output", str(output.resolve()),
+              "--flash_mode", settings["flash_mode"],
+              "--flash_freq", settings["flash_freq"],
+              "--flash_size", settings["flash_size"],
+          ]
+
           for offset, filename in entries:
               command.extend([hex(offset), filename])
 
           print("Merging:", entries, flush=True)
           subprocess.run(command, cwd=build, check=True)
 
-          # Verify that all flash components appear at
-          # their intended offsets in the merged image.
-          merged = Path(
-              "dist/Tab5-Launchpad-full.bin"
-          ).read_bytes()
+          # Validate the complete image before publishing.
+          merged = output.read_bytes()
 
           for offset, filename in entries:
               original = (build / filename).read_bytes()
-              actual = merged[
-                  offset:offset + len(original)
-              ]
+              actual = merged[offset:offset + len(original)]
 
-              # esptool can rewrite flash header fields
-              # when merging. Compare with the exception
-              # of those permitted header bytes.
+              if len(actual) != len(original):
+                  raise RuntimeError(
+                      f"Truncated component: {filename}"
+                  )
+
               if actual != original:
+                  # esptool can rewrite bootloader image
+                  # header bytes 2 and 3 (flash settings).
                   if offset == 0x2000:
-                      assert (
+                      valid = (
                           actual[:2] == original[:2]
                           and actual[4:] == original[4:]
-                      ), f"Bootloader mismatch: {filename}"
+                      )
+                      if not valid:
+                          raise RuntimeError(
+                              f"Bootloader mismatch: {filename}"
+                          )
                   else:
                       raise RuntimeError(
                           f"Binary mismatch at {hex(offset)}: "
                           f"{filename}"
                       )
 
-          print("Merged firmware verified successfully.")
+          print(
+              "Merged firmware verified successfully.",
+              flush=True
+          )
+          print(
+              f"Full image: {len(merged)} bytes",
+              flush=True
+          )
           PY
 
-          # Only the four firmware binaries and checksum
-          # manifest are included in dist/.
+          # SHA256 checksum manifest.
           (
             cd dist
             sha256sum \
@@ -135,6 +151,8 @@ jobs:
               bootloader.bin \
               partition-table.bin \
               > SHA256SUMS.txt
+
+            sha256sum -c SHA256SUMS.txt
           )
 
           echo "=== Release files ==="
