@@ -74,7 +74,7 @@ jobs:
           command = [
               sys.executable, "-m", "esptool",
               "--chip", "esp32p4",
-              "merge-bin",
+              "merge_bin",
               "-o", "../dist/Tab5-Launchpad-full.bin",
               "--flash-mode", settings["flash_mode"],
               "--flash-freq", settings["flash_freq"],
