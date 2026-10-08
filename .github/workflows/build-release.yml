@@ -1,3 +1,4 @@
+
 name: Build and release firmware
 
 on:
@@ -8,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write 
+  contents: write
 
 jobs:
   native-tests:
@@ -23,10 +24,11 @@ jobs:
   build:
     needs: native-tests
     runs-on: ubuntu-latest
-    # Pinned to the exact IDF version this firmware is tested against (see
-    # README.md's Building section) -- bump both places together.
+
+    # Keep synchronized with README.md.
     container:
       image: espressif/idf:v5.5.4
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,54 +36,127 @@ jobs:
       - name: Build
         shell: bash
         run: |
+          set -euo pipefail
           . "$IDF_PATH/export.sh"
           idf.py build
 
-      - name: Collect flashable artifacts
+      - name: Package firmware binaries
         shell: bash
         run: |
+          set -euo pipefail
+          . "$IDF_PATH/export.sh"
+
           mkdir -p dist
+
+          # Individual binaries for advanced flashing.
           cp build/tab5-launchpad.bin dist/
           cp build/bootloader/bootloader.bin dist/
           cp build/partition_table/partition-table.bin dist/
-          cp build/flasher_args.json dist/
-          cp partitions.csv dist/
-          ( cd dist && sha256sum ./*.bin > SHA256SUMS.txt )
-          cat > dist/FLASH.md <<'EOF'
-          # Flashing Tab5-Launchpad
 
-          With `esptool` >= 5.x (ESP32-P4 support -- older esptool builds
-          reject `--chip esp32p4`, see this project's own README) on PATH:
+          # Produce a complete flash image using ESP-IDF's
+          # generated addresses and flash configuration.
+          #
+          # flasher_args.json is used internally only.
+          python - <<'PY'
+          import json
+          import subprocess
+          import sys
+          from pathlib import Path
 
-          ```sh
-          esptool --chip esp32p4 -p /dev/ttyACM0 -b 460800 write_flash \
-            0x2000  bootloader.bin \
-            0x8000  partition-table.bin \
-            0x10000 tab5-launchpad.bin
-          ```
+          build = Path("build")
+          args = json.loads(
+              (build / "flasher_args.json").read_text()
+          )
 
-          Those three offsets are this project's actual, current layout
-          (0x2000 bootloader / 0x8000 partition table / 0x10000 app,
-          standard for ESP32-P4) -- `flasher_args.json` in this same
-          archive is the generated-at-build-time ground truth if they
-          ever drift. Or use the full ESP-IDF toolchain instead:
+          settings = args["flash_settings"]
+          flash_files = args["flash_files"]
 
-          ```sh
-          idf.py -p /dev/ttyACM0 flash monitor
-          ```
-          EOF
+          command = [
+              sys.executable, "-m", "esptool",
+              "--chip", "esp32p4",
+              "merge-bin",
+              "-o", "../dist/Tab5-Launchpad-full.bin",
+              "--flash-mode", settings["flash_mode"],
+              "--flash-freq", settings["flash_freq"],
+              "--flash-size", settings["flash_size"],
+          ]
+
+          entries = sorted(
+              (
+                  (int(offset, 0), filename)
+                  for offset, filename in flash_files.items()
+              ),
+              key=lambda entry: entry[0],
+          )
+
+          for offset, filename in entries:
+              command.extend([hex(offset), filename])
+
+          print("Merging:", entries, flush=True)
+          subprocess.run(command, cwd=build, check=True)
+
+          # Verify that all flash components appear at
+          # their intended offsets in the merged image.
+          merged = Path(
+              "dist/Tab5-Launchpad-full.bin"
+          ).read_bytes()
+
+          for offset, filename in entries:
+              original = (build / filename).read_bytes()
+              actual = merged[
+                  offset:offset + len(original)
+              ]
+
+              # esptool can rewrite flash header fields
+              # when merging. Compare with the exception
+              # of those permitted header bytes.
+              if actual != original:
+                  if offset == 0x2000:
+                      assert (
+                          actual[:2] == original[:2]
+                          and actual[4:] == original[4:]
+                      ), f"Bootloader mismatch: {filename}"
+                  else:
+                      raise RuntimeError(
+                          f"Binary mismatch at {hex(offset)}: "
+                          f"{filename}"
+                      )
+
+          print("Merged firmware verified successfully.")
+          PY
+
+          # Only the four firmware binaries and checksum
+          # manifest are included in dist/.
+          (
+            cd dist
+            sha256sum \
+              Tab5-Launchpad-full.bin \
+              tab5-launchpad.bin \
+              bootloader.bin \
+              partition-table.bin \
+              > SHA256SUMS.txt
+          )
+
+          echo "=== Release files ==="
+          ls -lh dist/
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: tab5-launchpad-firmware-${{ github.sha }}
           path: dist/
+          if-no-files-found: error
           retention-days: 30
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: |
+            dist/Tab5-Launchpad-full.bin
+            dist/tab5-launchpad.bin
+            dist/bootloader.bin
+            dist/partition-table.bin
+            dist/SHA256SUMS.txt
           generate_release_notes: true
           fail_on_unmatched_files: true
